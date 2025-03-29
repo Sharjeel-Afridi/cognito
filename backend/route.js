@@ -3,8 +3,9 @@ import {
     Login,
     createCognitoUser,
     LogOut,
-    hello,
     getUser,
+    refreshTokens,
+    respondToChallenge
 } from "./cognitoFunctions.js";
 
 import auth from "./auth/jwtAuth.js";
@@ -15,6 +16,8 @@ const router = express.Router();
 router.post("/login", Login);
 router.post("/register", createCognitoUser);
 router.post("/logout", LogOut);
+router.post("/refresh", refreshTokens);
+router.post("/challenge", respondToChallenge);
 
 // Protected Routes
 // router.post("/hello", auth.Validate, hello);
