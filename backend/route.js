@@ -18,9 +18,9 @@ router.post("/register", createCognitoUser);
 router.post("/logout", LogOut);
 router.post("/refresh", refreshTokens);
 router.post("/challenge", respondToChallenge);
+router.get("/getuser", auth.Validate, getUser);
 
 // Protected Routes
 // router.post("/hello", auth.Validate, hello);
-// router.get("/getuser", auth.Validate, getUser);
 
 export default router;

@@ -117,53 +117,78 @@ export default function AuthForm() {
     setMessage("");
 
     try {
-      const response = await fetch("http://localhost:3000/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
+        const queryParams = new URLSearchParams(window.location.search);
+        const redirectUri = queryParams.get("redirect_uri");
+        
+        const response = await fetch("http://localhost:3000/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            username, 
+            password,
+            redirectUri // Include redirectUri in request
+          }),
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (response.ok && data.success) {
-        // Check if we need to handle a NEW_PASSWORD_REQUIRED challenge
-        if (data.challengeName === "NEW_PASSWORD_REQUIRED") {
-          setNewPasswordMode(true);
-          setSessionToken(data.session);
-          const userAttrs = JSON.parse(data.challengeParameters.userAttributes);
-          setChallengeUserData(userAttrs);
-          setMessage("Please set a new password to complete your login.");
-        } else if (data.tokens) {
-          // Normal successful login
-          localStorage.setItem("cognitoTokens", JSON.stringify(data.tokens));
-          
-          const userInfo = {
-            username: username,
-            loginTime: new Date().toISOString(),
-            email: data.email
-          };
-          
-          localStorage.setItem("cognitoUser", JSON.stringify(userInfo));
-          
-          setIsLoggedIn(true);
-          setUserData(userInfo);
-          setMessage("Login successful!");
-          
-          // Clear form
-          setUsername("");
-          setPassword("");
-          
-          // Set default role
-          setUserRoles(["User"]);
+        if (response.ok && data.success) {
+          if (data.challengeName === "NEW_PASSWORD_REQUIRED") {
+            setNewPasswordMode(true);
+            setSessionToken(data.session);
+            const userAttrs = JSON.parse(data.challengeParameters.userAttributes);
+            setChallengeUserData(userAttrs);
+            setMessage("Please set a new password to complete your login.");
+            
+            // Store redirectUri for use after challenge is completed
+            if (data.redirectUri) {
+              localStorage.setItem("pendingRedirectUri", data.redirectUri);
+            }
+          } else if (data.tokens) {
+            // Normal successful login
+            localStorage.setItem("cognitoTokens", JSON.stringify(data.tokens));
+            
+            const userInfo = {
+              username: username,
+              loginTime: new Date().toISOString(),
+              email: data.email
+            };
+            
+            localStorage.setItem("cognitoUser", JSON.stringify(userInfo));
+            
+            setIsLoggedIn(true);
+            setUserData(userInfo);
+            
+            // Handle redirect if redirectUri exists in the response
+            if (data.redirectUri) {
+              const handleRedirect = () => {
+                
+                window.location.href = `${data.redirectUri}#access_token=${response.tokens.accessToken}&token_type=Bearer`;
+                
+              };
+              
+              // Redirect after a short delay to ensure state is updated
+              setTimeout(handleRedirect, 300);
+              setMessage("Login successful! Redirecting...");
+            } else {
+              setMessage("Login successful!");
+            }
+            
+            // Clear form
+            setUsername("");
+            setPassword("");
+            
+            // Set default role
+            setUserRoles(["User"]);
+          }
+        } else {
+          setMessage(data.result || "Login failed");
         }
-      } else {
-        setMessage(data.result || "Login failed");
+      } catch (error) {
+        setMessage("An error occurred during login");
+        console.error("Login error:", error);
       }
-    } catch (error) {
-      setMessage("An error occurred during login");
-      console.error("Login error:", error);
-    }
-  };
+    };
 
   const handleCompletePasswordChallenge = async (e) => {
     e.preventDefault();
