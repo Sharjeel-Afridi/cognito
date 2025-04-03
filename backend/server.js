@@ -46,6 +46,8 @@ app.use((req, res, next) => {
 
 // This route handles the initial OAuth authorization request from Rocket Chat
 app.get("/oauth/authorize", (req, res) => {
+
+  // http://localhost:3001/oauth/authorize?client_id=rocket.chat&redirect_uri=http://localhost:3000/oauth/callback&response_type=code&scope=openid&state=xyz
   // Extract OAuth parameters
   const { client_id, redirect_uri, response_type, scope, state } = req.query;
   
@@ -58,22 +60,11 @@ app.get("/oauth/authorize", (req, res) => {
   const frontendURL = process.env.FRONTEND_LOGIN_URL || "http://localhost:5173/login";
   
   // Pass all the OAuth parameters to your custom login UI
+  // http://localhost:5173/login?client_id=rocket.chat&redirect_uri=http://localhost:3000/oauth/callback&response_type=code&scope=openid&state=xyz
   res.redirect(
     `${frontendURL}?client_id=${client_id}&redirect_uri=${encodeURIComponent(redirect_uri)}&response_type=${response_type}&scope=${scope || ''}&state=${state || ''}`
   );
 });
-
-// OAuth token endpoint - Rocket Chat will call this to exchange the authorization code for tokens
-// app.post("/oauth/token", (req, res) => {
-//   // This endpoint will be handled by the routes file
-//   routes.handleOAuthToken(req, res);
-// });
-
-// OAuth user info endpoint - Rocket Chat will call this to get user information
-// app.get("/oauth/userinfo", (req, res) => {
-//   // This endpoint will be handled by the routes file
-//   routes.handleUserInfo(req, res);
-// });
 
 // Use API routes
 app.use("/", routes);

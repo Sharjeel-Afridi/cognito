@@ -11,8 +11,9 @@ console.log("AWS Secret Key available:", !!process.env.SECRET_KEY);
 
 AWS.config.update({
   region: process.env.COGNITO_REGION,
-  // accessKeyId: process.env.ACCESS_KEY,
-  // secretAccessKey: process.env.SECRET_KEY
+  accessKeyId: process.env.ACCESS_KEY,
+  secretAccessKey: process.env.SECRET_KEY,
+  sessionToken: process.env.SESSION_TOKEN // Optional, if using temporary credentials
 });
 
 const cognito = new AWS.CognitoIdentityServiceProvider({ 
@@ -40,111 +41,6 @@ function calculateSecretHash(username) {
   
   return hmac.digest('base64');
 }
-
-// OAuth endpoints for custom UI integration
-
-
-// This endpoint handles the OAuth token exchange
-export const handleOAuthToken = async (req, res) => {
-  try {
-  console.log("OAuth token request received");
-  console.log("Headers:", req.headers);
-  console.log("Body:", req.body);
-  console.log("Query:", req.query);
-    
-    // Try to get code from various sources (body or query params)
-    const code = req.body?.code || req.query?.code;
-    
-    if (!code) {
-      return res.status(400).json({ 
-        error: "invalid_request", 
-        error_description: "Authorization code is missing" 
-      });
-    }
-    
-    // Look up the stored tokens for this code
-    const storedData = codeStore.get(code);
-    
-    if (!storedData || Date.now() > storedData.expiry) {
-      // Code not found or expired
-      codeStore.delete(code); // Clean up if expired
-      return res.status(400).json({
-        error: "invalid_grant",
-        error_description: "Authorization code is invalid or expired"
-      });
-    }
-    
-    // Delete the code so it can't be used again (important security practice)
-    codeStore.delete(code);
-    
-    // Return the stored tokens to Rocket Chat
-    return res.status(200).json(storedData.tokens);
-  } catch (error) {
-    console.error("OAuth token exchange error:", error);
-    res.status(400).json({
-      error: "invalid_grant",
-      error_description: error.message
-    });
-  }
-};
-
-// OAuth user info endpoint - returns user information from the access token
-export const handleUserInfo = async (req, res) => {
-  try {
-    const authHeader = req.header('Authorization');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        error: "invalid_token",
-        error_description: "Invalid or missing access token"
-      });
-    }
-    
-    const token = authHeader.replace('Bearer ', '');
-    
-    // Call Cognito to get user information
-    try {
-      // First try using the SDK method (requires access token)
-      const data = await cognito.getUser({ AccessToken: token }).promise();
-      
-      // Format attributes into a response
-      const attributes = Object.fromEntries(
-        data.UserAttributes.map(attr => [attr.Name, attr.Value])
-      );
-      
-      return res.status(200).json({
-        sub: attributes.sub,
-        email: attributes.email,
-        email_verified: attributes.email_verified === 'true',
-        name: attributes.name || attributes.given_name || data.Username,
-        preferred_username: data.Username
-      });
-    } catch (error) {
-      // If direct access fails, try using Cognito's userInfo endpoint
-      // This works with ID tokens in OAuth flows
-      const userInfoEndpoint = `https://${process.env.COGNITO_DOMAIN}/oauth2/userInfo`;
-      
-      const response = await fetch(userInfoEndpoint, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to retrieve user information');
-      }
-      
-      const userData = await response.json();
-      return res.status(200).json(userData);
-    }
-  } catch (error) {
-    console.error("User info error:", error);
-    res.status(401).json({
-      error: "invalid_token",
-      error_description: error.message
-    });
-  }
-};
 
 // Login endpoint for direct API calls from your custom UI
 export const login = async (req, res) => {
@@ -249,6 +145,118 @@ export const login = async (req, res) => {
     res.status(401).json({ error: error.message });
   }
 };
+
+
+
+// OAuth endpoints for custom UI integration
+
+
+// This endpoint handles the OAuth token exchange
+export const handleOAuthToken = async (req, res) => {
+  try {
+  console.log("OAuth token request received");
+  console.log("Headers:", req.headers);
+  console.log("Body:", req.body);
+  console.log("Query:", req.query);
+    
+    // Try to get code from various sources (body or query params)
+    const code = req.body?.code || req.query?.code;
+    
+    if (!code) {
+      return res.status(400).json({ 
+        error: "invalid_request", 
+        error_description: "Authorization code is missing" 
+      });
+    }
+    
+    // Look up the stored tokens for this code
+    const storedData = codeStore.get(code); 
+    // here we get the tokens only iof there are tokens associated with that code
+    
+    if (!storedData || Date.now() > storedData.expiry) {
+      // Code not found or expired
+      codeStore.delete(code); // Clean up if expired
+      return res.status(400).json({
+        error: "invalid_grant",
+        error_description: "Authorization code is invalid or expired"
+      });
+    }
+    
+    // Delete the code so it can't be used again (important security practice)
+    codeStore.delete(code);
+    
+    // Return the stored tokens to Rocket Chat
+    return res.status(200).json(storedData.tokens);
+  } catch (error) {
+    console.error("OAuth token exchange error:", error);
+    res.status(400).json({
+      error: "invalid_grant",
+      error_description: error.message
+    });
+  }
+};
+
+
+
+
+// OAuth user info endpoint - returns user information from the access token
+export const handleUserInfo = async (req, res) => {
+  try {
+    const authHeader = req.header('Authorization');
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        error: "invalid_token",
+        error_description: "Invalid or missing access token"
+      });
+    }
+    
+    const token = authHeader.replace('Bearer ', '');
+    
+    // Call Cognito to get user information
+    try {
+      // First try using the SDK method (requires access token)
+      const data = await cognito.getUser({ AccessToken: token }).promise();
+      
+      // Format attributes into a response
+      const attributes = Object.fromEntries(
+        data.UserAttributes.map(attr => [attr.Name, attr.Value])
+      );
+      
+      return res.status(200).json({
+        sub: attributes.sub,
+        email: attributes.email,
+        email_verified: attributes.email_verified === 'true',
+        name: attributes.name || attributes.given_name || data.Username,
+        preferred_username: data.Username
+      });
+    } catch (error) {
+      // If direct access fails, try using Cognito's userInfo endpoint
+      // This works with ID tokens in OAuth flows
+      const userInfoEndpoint = `https://${process.env.COGNITO_DOMAIN}/oauth2/userInfo`;
+      
+      const response = await fetch(userInfoEndpoint, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to retrieve user information');
+      }
+      
+      const userData = await response.json();
+      return res.status(200).json(userData);
+    }
+  } catch (error) {
+    console.error("User info error:", error);
+    res.status(401).json({
+      error: "invalid_token",
+      error_description: error.message
+    });
+  }
+};
+
 
 // Handle Cognito challenges (like NEW_PASSWORD_REQUIRED)
 export const respondToChallenge = async (req, res) => {

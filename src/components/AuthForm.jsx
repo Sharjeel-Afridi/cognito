@@ -229,7 +229,7 @@ export default function AuthForm() {
             console.log(data);
             console.log(redirectUrl.toString());
             setMessage("Login successful! Redirecting to application...");
-
+            // http:localhost:3000/oauth/callback?code=xyz&state=abc
             // Redirect after a short delay to ensure message is seen
             setTimeout(() => {
               window.location.href = redirectUrl.toString();
