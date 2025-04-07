@@ -1,26 +1,31 @@
 import express from "express";
 import {
-    Login,
-    createCognitoUser,
-    LogOut,
-    getUser,
-    refreshTokens,
-    respondToChallenge
+  createCognitoUser,
+  login,
+  refreshTokens,
+  respondToChallenge,
+  getUser,
+  logOut,
+  getLogoutUrl,
+  hello,
+  handleOAuthToken,
+  handleUserInfo
 } from "./cognitoFunctions.js";
-
-import auth from "./auth/jwtAuth.js";
 
 const router = express.Router();
 
-// Auth Routes
-router.post("/login", Login);
-router.post("/register", createCognitoUser);
-router.post("/logout", LogOut);
+// User management routes
+router.post("/create", createCognitoUser);
+router.post("/login", login);
 router.post("/refresh", refreshTokens);
 router.post("/challenge", respondToChallenge);
-router.get("/getuser", auth.Validate, getUser);
+router.get("/oauth/userinfo", getUser);
+router.post("/logout", logOut);
+router.get("/logout-url", getLogoutUrl);
+router.post("/hello", hello);
 
-// Protected Routes
-// router.post("/hello", auth.Validate, hello);
+// OAuth endpoints
+router.post("/oauth/token", handleOAuthToken);
+router.get("/oauth/userinfo", handleUserInfo);
 
 export default router;
