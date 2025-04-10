@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import "../App.css";
+// import { SRPCalculator } from "../../backend/SRPcalculator";
 
 export default function AuthForm() {
   const [username, setUsername] = useState("");
@@ -14,92 +15,13 @@ export default function AuthForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [sessionToken, setSessionToken] = useState("");
   const [challengeUserData, setChallengeUserData] = useState(null);
+  const [challengeParameters, setChallengeParameters] = useState({});
 
   // OAuth related states
   const [oauthParams, setOauthParams] = useState(null);
 
-  // API client to handle token refresh
-  const apiClient = {
-    fetch: async (url, options = {}) => {
-      try {
-        const tokens = JSON.parse(
-          localStorage.getItem("cognitoTokens") || "{}"
-        );
 
-        // Add authorization header if we have tokens
-        if (tokens.accessToken) {
-          options.headers = {
-            ...options.headers,
-            Authorization: `Bearer ${tokens.accessToken}`,
-          };
-        }
-
-        const response = await fetch(url, {
-          ...options,
-          headers: {
-            "Content-Type": "application/json",
-            ...options.headers,
-          },
-        });
-
-        // If unauthorized, try to refresh token
-        if (response.status === 401 && tokens.refreshToken) {
-          try {
-            const refreshResponse = await fetch(
-              "http://localhost:3001/refresh",
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  refreshToken: tokens.refreshToken,
-                  username: userData?.username,
-                }),
-              }
-            );
-
-            const refreshData = await refreshResponse.json();
-
-            if (refreshResponse.ok && refreshData.success) {
-              // Update tokens in storage
-              const updatedTokens = {
-                ...tokens,
-                accessToken: refreshData.tokens.accessToken,
-                idToken: refreshData.tokens.idToken,
-                expiresIn: refreshData.tokens.expiresIn,
-              };
-
-              localStorage.setItem(
-                "cognitoTokens",
-                JSON.stringify(updatedTokens)
-              );
-
-              // Retry original request with new token
-              options.headers = {
-                ...options.headers,
-                Authorization: `Bearer ${refreshData.tokens.accessToken}`,
-              };
-
-              return fetch(url, options);
-            } else {
-              // If refresh failed, log user out
-              localStorage.removeItem("cognitoTokens");
-              localStorage.removeItem("cognitoUser");
-              setIsLoggedIn(false);
-              setUserData(null);
-              throw new Error("Session expired. Please log in again.");
-            }
-          } catch (error) {
-            throw error;
-          }
-        }
-
-        return response;
-      } catch (error) {
-        console.error("API request error:", error);
-        throw error;
-      }
-    },
-  };
+ 
 
   // Parse query parameters from URL
   useEffect(() => {
@@ -122,212 +44,10 @@ export default function AuthForm() {
         state,
       });
 
-      setMessage("Please sign in to authorize access to your account");
+      // setMessage("Please sign in to authorize access to your account");
     }
   }, []);
 
-  // Check if user is already logged in when component mounts
-  useEffect(() => {
-    const tokens = localStorage.getItem("cognitoTokens");
-    const user = localStorage.getItem("cognitoUser");
-
-    if (tokens && user) {
-      setIsLoggedIn(true);
-      setUserData(JSON.parse(user));
-
-      // Extract roles from ID token if available
-      try {
-        const parsedTokens = JSON.parse(tokens);
-        if (parsedTokens.idToken) {
-          // In a real app, you would decode the JWT to get roles
-          // For demo, we'll set a placeholder role
-          setUserRoles(["User"]);
-        }
-      } catch (error) {
-        console.error("Error parsing tokens:", error);
-      }
-
-      // Check if we need to handle OAuth flow for a logged-in user
-      if (oauthParams) {
-        handleOAuthAuthorization();
-      }
-    }
-  }, [oauthParams]);
-
-  // Function to handle OAuth authorization after login
-  const handleOAuthAuthorization = async () => {
-    if (!oauthParams || !isLoggedIn) return;
-
-    try {
-      // Generate an authorization code and redirect to the callback URL
-      // In a real implementation, we'd make a backend request to generate the code
-
-      setMessage("Authorizing application access...");
-
-      // Redirect back to the client application with an authorization code
-      const authCode = Math.random().toString(36).substring(2, 15);
-
-      // In a real app, this code would be generated and stored by the backend
-      const redirectUrl = new URL(oauthParams.redirect_uri);
-      redirectUrl.searchParams.append("code", authCode);
-      redirectUrl.searchParams.append("state", oauthParams.state || "");
-
-      // Redirect to the client application
-      // window.location.href = redirectUrl.toString();
-    } catch (error) {
-      console.error("OAuth authorization error:", error);
-      setMessage("Authorization failed: " + error.message);
-    }
-  };
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setMessage("");
-
-    try {
-      const response = await fetch("http://localhost:3001/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username,
-          password,
-          redirectUri: oauthParams?.redirect_uri, // Pass the redirect URI for OAuth flow
-        }),
-      });
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        if (data.challengeName === "NEW_PASSWORD_REQUIRED") {
-          setNewPasswordMode(true);
-          setSessionToken(data.session);
-          const userAttrs = JSON.parse(
-            data.challengeParameters.userAttributes || "{}"
-          );
-          setChallengeUserData(userAttrs);
-          setMessage("Please set a new password to complete your login.");
-        }else if (data.tokens) {
-          // Normal successful login
-          localStorage.setItem("cognitoTokens", JSON.stringify(data.tokens));
-
-          const userInfo = {
-            username: username,
-            loginTime: new Date().toISOString(),
-            email: data.email || username,
-          };
-
-          localStorage.setItem("cognitoUser", JSON.stringify(userInfo));
-
-          setIsLoggedIn(true);
-          setUserData(userInfo);
-
-          // Handle OAuth flow if needed
-          if (oauthParams && data.authorizationCode) {
-            // Redirect to the OAuth redirect URI with the authorization code
-            const redirectUrl = new URL(oauthParams.redirect_uri);
-            redirectUrl.searchParams.append("code", data.authorizationCode);
-            redirectUrl.searchParams.append("state", oauthParams.state || "");
-            console.log(data);
-            console.log(redirectUrl.toString());
-            setMessage("Login successful! Redirecting to application...");
-            // http:localhost:3000/oauth/callback?code=xyz&state=abc
-            // Redirect after a short delay to ensure message is seen
-            setTimeout(() => {
-              window.location.href = redirectUrl.toString();
-            }, 1000);
-          } else {
-            setMessage("Login successful!");
-          }
-
-          // Clear form
-          setUsername("");
-          setPassword("");
-
-          // Set default role
-          setUserRoles(["User"]);
-        }
-      } else {
-        setMessage(data.error || "Login failed");
-      }
-    } catch (error) {
-      setMessage("An error occurred during login");
-      console.error("Login error:", error);
-    }
-  };
-
-  const handleCompletePasswordChallenge = async (e) => {
-    e.preventDefault();
-
-    if (newPassword !== confirmPassword) {
-      setMessage("Passwords do not match");
-      return;
-    }
-
-    try {
-      const response = await fetch("http://localhost:3001/challenge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: username,
-          challengeName: "NEW_PASSWORD_REQUIRED",
-          session: sessionToken,
-          responses: {
-            USERNAME: username,
-            NEW_PASSWORD: newPassword,
-          },
-          redirectUri: oauthParams?.redirect_uri, // Pass the redirect URI for OAuth flow
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.success && data.tokens) {
-        // Store tokens and complete login
-        localStorage.setItem("cognitoTokens", JSON.stringify(data.tokens));
-
-        const userInfo = {
-          username: username,
-          loginTime: new Date().toISOString(),
-          email: challengeUserData?.email || username,
-        };
-        localStorage.setItem("cognitoUser", JSON.stringify(userInfo));
-
-        setIsLoggedIn(true);
-        setUserData(userInfo);
-
-        // Handle OAuth flow if needed
-        if (oauthParams && data.authorizationCode) {
-          // Redirect to the OAuth redirect URI with the authorization code
-          const redirectUrl = new URL(oauthParams.redirect_uri);
-          redirectUrl.searchParams.append("code", data.authorizationCode);
-          redirectUrl.searchParams.append("state", oauthParams.state || "");
-
-          setMessage("Login successful! Redirecting to application...");
-
-          // Redirect after a short delay to ensure message is seen
-          setTimeout(() => {
-            window.location.href = redirectUrl.toString();
-          }, 1000);
-        } else {
-          setMessage("Login successful!");
-        }
-
-        // Reset states
-        setNewPasswordMode(false);
-        setNewPassword("");
-        setConfirmPassword("");
-        setUsername("");
-        setPassword("");
-
-        // Set default role
-        setUserRoles(["User"]);
-      } else {
-        setMessage(data.error || "Failed to set new password");
-      }
-    } catch (error) {
-      setMessage("Error setting new password");
-      console.error("Password challenge error:", error);
-    }
-  };
 
   const handleLogout = async () => {
     try {
@@ -355,9 +75,70 @@ export default function AuthForm() {
       setIsLoggedIn(false);
       setUserData(null);
       setUserRoles([]);
-      setMessage("Logged out successfully");
+      // setMessage("Logged out successfully");
     }
   };
+
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    try {
+      // Send plain username/password to YOUR backend (over HTTPS in production)
+      const response = await fetch("http://localhost:3001/api/auth/signin", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: username,
+          password: password,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Login failed');
+      }
+      if(response.ok){
+        const redirectUrl = new URL(oauthParams.redirect_uri);
+        redirectUrl.searchParams.append("code", data.authorizationCode);
+        redirectUrl.searchParams.append("state", oauthParams.state || "");
+
+        console.log(redirectUrl.toString());
+
+        setTimeout(() => {
+          window.location.href = redirectUrl.toString();
+        }, 1000);
+      }
+      // Your backend handled SRP with Cognito. You get tokens back.
+      console.log("Login successful:", data);
+      localStorage.setItem("accessToken", data.tokens.AccessToken);
+      // ... (store other tokens, update UI) ...
+      setIsLoggedIn(true);
+    } catch (err) {
+      // ... (Error Handling as before) ...
+      const message = err.message || "Login failed.";
+    } finally {
+
+    }
+  };
+
+  const handleToken = async () => {
+    const tokens = fetch("http://localhost:3001/oauth/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        code: "700d79c6ab563bd14e747e3e07a8990731f7f73db5ac44a8beb36a7faab3f01a",
+        state:
+          "eyJsb2dpblN0eWxlIjoicmVkaXJlY3QiLCJjcmVkZW50aWFsVG9rZW4iOiJoWjRmbExyX2hVSXlCMTkyQkpzdEdPMnlzZEJaeElJN0dLZDdiem1lTVBlIiwiaXNDb3Jkb3ZhIjpmYWxzZSwicmVkaXJlY3RVcmwiOiJodHRwOi8vbG9jYWxob3N0OjMwMDAvaG9tZSJ9",
+      }),
+    });
+    const res = await tokens.json();
+  }
 
   return (
     <div className="auth-container">
@@ -407,58 +188,15 @@ export default function AuthForm() {
                     <strong>Scope:</strong>{" "}
                     {oauthParams.scope || "Default Access"}
                   </p>
-                  <button
+                  {/* <button
                     onClick={handleOAuthAuthorization}
                     className="button button-primary button-block"
                   >
                     Authorize Access
-                  </button>
+                  </button> */}
                 </div>
               </div>
             )}
-
-            {/* API Test section */}
-            <div className="api-test-section">
-              <p className="section-title">Test API Endpoints</p>
-              <div className="api-buttons">
-                <button
-                  onClick={async () => {
-                    try {
-                      const response = await apiClient.fetch(
-                        "http://localhost:3001/hello",
-                        {
-                          method: "POST",
-                          body: JSON.stringify({ name: userData?.username }),
-                        }
-                      );
-                      const data = await response.json();
-                      setMessage(`API response: ${data.result}`);
-                    } catch (error) {
-                      setMessage(`Error: ${error.message}`);
-                    }
-                  }}
-                  className="button button-primary"
-                >
-                  Hello API
-                </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      const response = await apiClient.fetch(
-                        "http://localhost:3001/getuser"
-                      );
-                      const data = await response.json();
-                      setMessage(`User data fetched: ${data.email}`);
-                    } catch (error) {
-                      setMessage(`Error: ${error.message}`);
-                    }
-                  }}
-                  className="button button-primary"
-                >
-                  Get User
-                </button>
-              </div>
-            </div>
 
             {/* Logout Button */}
             <div className="logout-section">
@@ -483,74 +221,6 @@ export default function AuthForm() {
               </div>
             )}
           </div>
-        ) : newPasswordMode ? (
-          <div className="new-password-view">
-            <div className="auth-header">
-              <h2>New Password Required</h2>
-              <p className="auth-subheader">
-                Please set a new password to continue
-              </p>
-            </div>
-
-            <form
-              className="auth-form"
-              onSubmit={handleCompletePasswordChallenge}
-            >
-              <div className="form-group">
-                <label htmlFor="new-password" className="form-label">
-                  New Password
-                </label>
-                <input
-                  id="new-password"
-                  name="new-password"
-                  type="password"
-                  required
-                  minLength="8"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="form-input"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="confirm-password" className="form-label">
-                  Confirm Password
-                </label>
-                <input
-                  id="confirm-password"
-                  name="confirm-password"
-                  type="password"
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="form-input"
-                />
-              </div>
-
-              <div className="form-group">
-                <button
-                  type="submit"
-                  className="button button-primary button-block"
-                >
-                  Set New Password
-                </button>
-              </div>
-            </form>
-
-            {message && (
-              <div
-                className={`message ${
-                  message.includes("Please set")
-                    ? "message-info"
-                    : message.includes("success")
-                    ? "message-success"
-                    : "message-error"
-                }`}
-              >
-                {message}
-              </div>
-            )}
-          </div>
         ) : (
           <div className="login-view">
             <div className="auth-header">
@@ -562,7 +232,8 @@ export default function AuthForm() {
               </p>
             </div>
 
-            <form className="auth-form" onSubmit={handleLogin}>
+            <form className="auth-form" onSubmit={handleSubmit}>
+              {/* <form className="auth-form" onSubmit={handleLogin}> */}
               <div className="form-group">
                 <label htmlFor="username" className="form-label">
                   Username
@@ -620,7 +291,13 @@ export default function AuthForm() {
               </div>
             )}
 
-            {message && (
+            <button
+              onClick={handleToken}
+              className="button button-primary button-block"
+            >
+              Tokens
+            </button>
+            {/* {message && (
               <div
                 className={`message ${
                   message.includes("success")
@@ -632,10 +309,18 @@ export default function AuthForm() {
               >
                 {message}
               </div>
-            )}
+            )} */}
           </div>
         )}
       </div>
+      {/* Add this button to your form */}
+      {/* <button
+        type="button"
+        className="mt-2 bg-red-500 text-white p-2 rounded"
+        onClick={handlePasswordReset}
+      >
+        Reset Password
+      </button> */}
     </div>
   );
 }

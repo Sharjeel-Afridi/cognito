@@ -233,7 +233,7 @@ export const handleUserInfo = async (req, res) => {
     } catch (error) {
       // If direct access fails, try using Cognito's userInfo endpoint
       // This works with ID tokens in OAuth flows
-      const userInfoEndpoint = `https://${process.env.COGNITO_DOMAIN}/oauth2/userInfo`;
+      const userInfoEndpoint = `https://${process.env.COGNITO_DOMAIN}/oauth/userInfo`;
       
       const response = await fetch(userInfoEndpoint, {
         headers: {
