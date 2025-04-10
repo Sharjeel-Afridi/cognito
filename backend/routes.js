@@ -1,6 +1,6 @@
 import express from "express";
 
-
+import bodyParser from "body-parser";
 import {
   CognitoIdentityProviderClient,
   NotAuthorizedException,
@@ -34,11 +34,6 @@ const client = new CognitoIdentityProviderClient({
 export const handleOAuthToken = async (req, res) => {
   try {
     console.log("OAuth token request received");
-    console.log("Headers:", req.headers);
-    console.log("Body:", req.body);
-    console.log("Query:", req.query);
-
-
     // Try to get code from various sources (body or query params)
     const code = req.body.code;
 
@@ -88,7 +83,12 @@ export const handleOAuthToken = async (req, res) => {
     });
   }
 };
-router.post("/oauth/token", handleOAuthToken);
+router.post(
+  "/oauth/token",
+  bodyParser.urlencoded({ extended: false }),
+  handleOAuthToken
+);
+
 
 // OAuth user info endpoint - returns user information using the access token
 export const handleUserInfo = async (req, res) => {
@@ -215,7 +215,7 @@ export const handleUserInfo = async (req, res) => {
 
 router.get("/oauth/userinfo", handleUserInfo);
 
-router.post("/api/auth/signin", async (req, res) => {
+router.post("/api/auth/signin",  async (req, res) => {
    console.log('--- SIGNIN ROUTE HIT (SRP FLOW - Helper Library Wrappers) ---');
    const { username, password } = req.body;
    const clientId = process.env.COGNITO_CLIENT_ID;

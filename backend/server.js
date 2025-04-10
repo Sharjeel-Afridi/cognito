@@ -12,7 +12,6 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
 
 // Handle both JSON and form-urlencoded for OAuth endpoints
 app.use((req, res, next) => {
