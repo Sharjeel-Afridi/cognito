@@ -10,10 +10,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@aws-crypto/sha256-js": "^5.2.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.782.0",
+    "amazon-cognito-identity-js": "^6.3.15",
+    "amazon-cognito-srp": "^1.0.1",
     "aws-sdk": "^2.1692.0",
     "body-parser": "^2.2.0",
+    "cognito-srp-helper": "^2.3.3",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
+    "crypto-js": "^4.2.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",

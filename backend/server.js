@@ -1,9 +1,11 @@
 import express from "express";
 import bodyParser from "body-parser";
 import dotenv from "dotenv";
-dotenv.config();
 import cors from "cors";
-import routes from "./route.js";
+import routes from "./routes.js";
+
+// Load environment variables
+dotenv.config();
 
 const app = express();
 
@@ -11,32 +13,63 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
+// Handle both JSON and form-urlencoded for OAuth endpoints
+app.use((req, res, next) => {
+  if (
+    req.path === "/oauth/token" &&
+    req.headers["content-type"]?.includes("application/x-www-form-urlencoded")
+  ) {
+    let data = "";
+    req.on("data", (chunk) => {
+      data += chunk.toString();
+    });
 
+    req.on("end", () => {
+      try {
+        const params = new URLSearchParams(data);
+        const parsedBody = {};
 
+        for (const [key, value] of params.entries()) {
+          parsedBody[key] = value;
+        }
+
+        req.body = parsedBody;
+      } catch (error) {
+        console.error("Failed to parse form data:", error);
+      }
+      next();
+    });
+  } else {
+    next();
+  }
+});
+
+// OAuth authorization endpoint
 app.get("/oauth/authorize", (req, res) => {
-  const frontendURL = "http://localhost:5173/login"; // Your frontend UI
+  // Extract and validate OAuth parameters
+  const { client_id, redirect_uri, response_type, scope, state } = req.query;
+
+  if (!client_id || !redirect_uri || response_type !== "code") {
+    return res.status(400).send("Invalid OAuth request parameters");
+  }
+
+  // Redirect to the custom login page with OAuth parameters
+  const loginUrl = process.env.FRONTEND_URL || "http://localhost:5173/login";
+
   res.redirect(
-    `${frontendURL}?client_id=${req.query.client_id}&redirect_uri=${req.query.redirect_uri}&response_type=code`
+    `${loginUrl}?client_id=${client_id}&redirect_uri=${encodeURIComponent(
+      redirect_uri
+    )}&response_type=${response_type}&scope=${scope || ""}&state=${state || ""}`
   );
 });
 
+// API routes
+app.use("/", routes);
 
-// Use routes
-app.use("/api", routes);
-
-const port = process.env.PORT || 3000;
-const server = app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+// Start the server
+const port = process.env.PORT || 3001;
+app.listen(port, () => {
+  console.log(`OAuth server running on port ${port}`);
 });
 
-// Handle errors
-if (typeof process !== "undefined" && process.on) {
-  process.on("unhandledRejection", (error) => {
-    console.log("UnhandledRejection:", error.message);
-    server.close(() => process.exit(1));
-  });
-} else {
-  console.error(
-    "UnhandledRejection handling is not supported in this environment."
-  );
-}
+export default app;
